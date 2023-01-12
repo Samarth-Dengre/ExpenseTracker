@@ -1,12 +1,16 @@
-import React, { useContext, useLayoutEffect } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import React, { useContext, useLayoutEffect, useState } from "react";
+import { StyleSheet, View } from "react-native";
 import ExpenseForm from "../components/manageExpense/ExpenseForm";
-import Button from "../components/UI/Button";
+import ErrorOverlay from "../components/UI/ErrorOverlay";
 import IconButton from "../components/UI/IconButton";
+import LoadingOverlay from "../components/UI/LoadingOverlay";
 import { GlobalStyles } from "../constants/styles";
 import { ExpensesContext } from "../store/expenseContext";
+import { deleteExpense, storeExpense, updateExpnense } from "../utils/http";
 
 function ManageExpenseScreen({ route, navigation }) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState();
   const editedExpenseId = route.params?.expenseId;
   const isEditing = !!editedExpenseId;
   const expenseCtx = useContext(ExpensesContext);
@@ -20,21 +24,45 @@ function ManageExpenseScreen({ route, navigation }) {
     });
   }, [navigation]);
 
-  function deleteExpenseHandler() {
-    expenseCtx.deleteExpense(editedExpenseId);
-    navigation.goBack();
+  async function deleteExpenseHandler() {
+    setIsLoading(true);
+    try {
+      await deleteExpense(editedExpenseId);
+      expenseCtx.deleteExpense(editedExpenseId);
+      navigation.goBack();
+    } catch (error) {
+      setError("Could not delete!");
+      setIsLoading(false);
+    }
   }
   function cancelHandler() {
     navigation.goBack();
   }
-  function confirmHandler(expenseData) {
-    if (isEditing) {
-      expenseCtx.updateExpense(editedExpenseId, expenseData);
-    } else {
-      expenseCtx.addExpense(expenseData);
+  async function confirmHandler(expenseData) {
+    try {
+      if (isEditing) {
+        setIsLoading(true);
+        expenseCtx.updateExpense(editedExpenseId, expenseData);
+        await updateExpnense(editedExpenseId, expenseData);
+      } else {
+        setIsLoading(true);
+        const id = storeExpense(expenseData);
+        expenseCtx.addExpense({ ...expenseData, id: id });
+      }
+      setIsLoading(false);
+      navigation.goBack();
+    } catch (error) {
+      setError("Colud not save data - please try again later");
+      setIsLoading(false);
     }
-    navigation.goBack();
   }
+
+  function errorHandler() {
+    setError(null);
+  }
+  if (error && !isLoading)
+    return <ErrorOverlay message={error} onConfirm={errorHandler} />;
+  if (isLoading) return <LoadingOverlay />;
   return (
     <View style={styles.overAllContainer}>
       <ExpenseForm
